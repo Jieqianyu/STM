@@ -273,7 +273,7 @@ def train(trainloader, model, criterion, optimizer, epoch, use_cuda, iter_size, 
         backward_loss = 0.0
         for idx in range(N):
             No = objs[idx].item()
-            gt_backward = masks[idx, 0]
+            gt_backward = masks[idx, 0:1]
             for t in range(1, T):
                 # forward
                 gt_forward = masks[idx, t:t+1]

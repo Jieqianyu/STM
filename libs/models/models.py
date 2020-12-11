@@ -333,26 +333,30 @@ class STM(nn.Module):
                     forward_tmp_out.append(out)
                 forward_batch_out.append(torch.cat(forward_tmp_out, dim=0))
 
+                del forward_batch_keys, forward_batch_vals, tmp_key, tmp_val
+
                 # backward
                 backward_batch_keys = []
                 backward_batch_vals = []
                 backward_tmp_out = []
                 for t in range(1, T):
                     # memorize
-                    key, val, _ = self.memorize(frame=frame[idx, t:t+1], masks=forward_tmp_out[t-1:t], 
+                    key, val, _ = self.memorize(frame=frame[idx, t:t+1], masks=forward_tmp_out[t-1], 
                         num_objects=num_object)
 
-                    forward_batch_keys.append(key)
-                    forward_batch_vals.append(val)
+                    backward_batch_keys.append(key)
+                    backward_batch_vals.append(val)
                     # segment
-                    tmp_key = torch.cat(forward_batch_keys, dim=1)
-                    tmp_val = torch.cat(forward_batch_vals, dim=1)
-                    logits, ps = self.segment(frame=frame[idx, 0], keys=tmp_key, values=tmp_val, 
+                    tmp_key = torch.cat(backward_batch_keys, dim=1)
+                    tmp_val = torch.cat(backward_batch_vals, dim=1)
+                    logits, ps = self.segment(frame=frame[idx, 0:1], keys=tmp_key, values=tmp_val, 
                         num_objects=num_object, max_obj=max_obj)
 
                     out = torch.softmax(logits, dim=1)
                     backward_tmp_out.append(out)
                 backward_batch_out.append(torch.cat(backward_tmp_out, dim=0))
+
+                del backward_batch_keys, backward_batch_vals, tmp_key, tmp_val
 
             forward_batch_out = torch.stack(forward_batch_out, dim=0) # B, T-1, No, H, W
             backward_batch_out = torch.stack(backward_batch_out, dim=0) # B, T-1, No, H, W
