@@ -1,4 +1,4 @@
-from libs.dataset.data import ROOT, DATA_CONTAINER, multibatch_collate_fn
+from libs.dataset.data import DATA_CONTAINER, multibatch_collate_fn
 from libs.dataset.transform import TrainTransform, TestTransform
 from libs.utils.logger import Logger, AverageMeter
 from libs.utils.loss import *
@@ -79,7 +79,7 @@ def main():
         use_cuda=use_gpu,
         opt=opt)
 
-    print('==> Results are saved at: {}'.format(os.path.join(ROOT, opt.output_dir, opt.valset)))
+    print('==> Results are saved at: {}'.format(os.path.join(opt.results, opt.valset)))
 
 def test(testloader, model, use_cuda, opt):
 
@@ -152,7 +152,7 @@ def test(testloader, model, use_cuda, opt):
             
             pred = torch.cat(pred, dim=0)
             pred = pred.detach().cpu().numpy()
-            write_mask(pred, info, opt, directory=opt.output_dir)
+            write_mask(pred, info, opt)
 
     return
 

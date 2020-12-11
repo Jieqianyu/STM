@@ -8,18 +8,23 @@ import cv2
 import random
 
 from PIL import Image
-from ..dataset.data import ROOT
+from options import OPTION as opt
+from ..dataset.data import ROOT_DAVIS
 
-def save_checkpoint(state, epoch, is_best, checkpoint='checkpoint', filename='checkpoint'):
-    filepath = os.path.join(checkpoint, filename + '.pth.tar')
+def save_checkpoint(state, epoch, is_best, checkpoint='checkpoint', filename='checkpoint', freq=1):
+    if epoch > opt.epochs - 10:
+        filepath = os.path.join(checkpoint, filename + '_{}'.format(str(epoch)) + '.pth.tar')
+    else:
+        filepath = os.path.join(checkpoint, filename + '.pth.tar')
     torch.save(state, filepath)
     print('==> save model at {}'.format(filepath))
+
     if is_best:
         cpy_file = os.path.join(checkpoint, filename+'_model_best.pth.tar')
         shutil.copyfile(filepath, cpy_file)
         print('==> save best model at {}'.format(cpy_file))
 
-def write_mask(mask, info, opt, directory='results'):
+def write_mask(mask, info, opt):
 
     """
     mask: numpy.array of size [T x max_obj x H x W]
@@ -27,7 +32,7 @@ def write_mask(mask, info, opt, directory='results'):
 
     name = info['name']
 
-    directory = os.path.join(ROOT, directory)
+    directory = os.path.join(opt.results)
 
     if not os.path.exists(directory):
         os.mkdir(directory)
@@ -70,7 +75,8 @@ def write_mask(mask, info, opt, directory='results'):
             seg = np.zeros((h, w, 3), dtype=np.uint8)
             for k in range(1, rescale_mask.max()+1):
                 seg[rescale_mask==k, :] = info['palette'][(k*3):(k+1)*3]
-            inp_img = cv2.imread(os.path.join(ROOT, opt.valset, 'JPEGImages', '480p', name, output_name.replace('png', 'jpg')))
+            if opt.valset == 'DAVIS17':
+                inp_img = cv2.imread(os.path.join(ROOT_DAVIS, 'JPEGImages', '480p', name, output_name.replace('png', 'jpg')))
             im = cv2.addWeighted(inp_img, 0.5, seg, 0.5, 0.0)
             cv2.imwrite(os.path.join(video, output_name), im)
         

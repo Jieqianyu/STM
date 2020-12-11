@@ -13,10 +13,11 @@ import pickle
 from PIL import Image
 from torch.utils.data import Dataset
 
+
 DATA_CONTAINER = {}
-ROOT = '/public/shared/stm_output'
 ROOT_YT = '/public/datasets/YTBVOS'
-ROOT_DAVIS = '/public/shared/DAVIS'
+ROOT_DAVIS = '/mnt/hgfs/Download/DAVIS'
+# ROOT_DAVIS = '/public/shared/DAVIS'
 MAX_TRAINING_OBJ = 6
 MAX_TRAINING_SKIP = 100
 
@@ -328,6 +329,7 @@ class Davis17(BaseData):
         #     num_obj = min(num_obj, MAX_TRAINING_OBJ)
 
         mask = [convert_mask(msk, self.max_obj) for msk in mask]
+        # print(mask[0].shape)
 
         info = {'name': vid}
         info['palette'] = Image.open(os.path.join(annofolder, frames[0]+'.png')).getpalette()
@@ -337,6 +339,7 @@ class Davis17(BaseData):
             raise RuntimeError('Lack of proper transformation')
 
         frame, mask = self.transform(frame, mask, False)
+        # print(frame.shape, mask.shape)
 
         if self.train:
             num_obj = 0

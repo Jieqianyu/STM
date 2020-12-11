@@ -1,4 +1,4 @@
-from libs.dataset.data import ROOT, DATA_CONTAINER, multibatch_collate_fn
+from libs.dataset.data import DATA_CONTAINER, multibatch_collate_fn
 from libs.dataset.transform import TrainTransform, TestTransform
 from libs.utils.logger import Logger, AverageMeter
 from libs.utils.loss import *
@@ -201,11 +201,11 @@ def main():
 
         if (epoch + 1) % opt.epoch_per_test == 0:
             net.module.phase = 'test'
-            test_loss = test(testloader,
-                            model=net.module,
-                            criterion=criterion,
-                            epoch=epoch,
-                            use_cuda=use_gpu)
+            test(testloader,
+                 model=net.module,
+                 criterion=criterion,
+                 epoch=epoch,
+                 use_cuda=use_gpu)
 
         # append logger file
         logger.log(epoch+1, opt.learning_rate, train_loss)
@@ -232,7 +232,7 @@ def main():
             'minloss': minloss,
             'optimizer': optimizer.state_dict(),
             'max_skip': skips,
-        }, epoch + 1, is_best, checkpoint=opt.checkpoint, filename=opt.mode)
+        }, epoch + 1, is_best, checkpoint=opt.checkpoint, filename=opt.mode, freq=opt.model_save_freq)
 
     logger.close()
 
@@ -265,17 +265,30 @@ def train(trainloader, model, criterion, optimizer, epoch, use_cuda, iter_size, 
         N, T, C, H, W = frames.size()
         max_obj = masks.shape[2]-1
 
-        total_loss = 0.0
-        out = model(frame=frames, mask=masks, num_objects=objs)
-        for idx in range(N):
-            for t in range(1, T):
-                gt = masks[idx, t:t+1]
-                pred = out[idx, t-1: t]
-                No = objs[idx].item()
-                    
-                total_loss = total_loss + criterion(pred, gt, No)
+        forward_out, backward_out = model(frame=frames, mask=masks, num_objects=objs) # frames: B, T, C, H, W; mask: B, T, no, H, W;
 
-        total_loss = total_loss / (N * (T-1))
+        # loss
+        total_loss = 0.0
+        forward_loss = 0.0
+        backward_loss = 0.0
+        for idx in range(N):
+            No = objs[idx].item()
+            gt_backward = masks[idx, 0]
+            for t in range(1, T):
+                # forward
+                gt_forward = masks[idx, t:t+1]
+                pred_forward = forward_out[idx, t-1: t]
+                forward_loss = forward_loss + criterion(pred_forward, gt_forward, No)
+
+                # backward
+                pred_backward = forward_out[idx, t-1: t]
+                backward_loss = backward_loss + criterion(pred_backward, gt_backward, No)
+
+        forward_loss = forward_loss / (N * (T-1))
+        backward_loss = backward_loss / (N * (T-1))
+
+        # total loss
+        total_loss = forward_loss + backward_loss
 
         # record loss
         if total_loss.item() > 0.0:
@@ -358,7 +371,7 @@ def test(testloader, model, criterion, epoch, use_cuda):
             
             pred = torch.cat(pred, dim=0)
             pred = pred.detach().cpu().numpy()
-            write_mask(pred, info, opt, directory=opt.output_dir)
+            write_mask(pred, info, opt)
 
             toc = time.time() - t1
 

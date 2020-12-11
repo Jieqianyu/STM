@@ -30,15 +30,17 @@ OPTION.milestone = []              # epochs to degrades the learning rate
 OPTION.loss = 'both'               # 'ce' or 'iou' or 'both'
 OPTION.mode = 'recurrent'          # 'mask' or 'recurrent' or 'threshold'
 OPTION.iou_threshold = 0.65        # used only for 'threshold' training
+OPTION.save_model_freq = 5         # frequence for saving model
 
 # ---------------------------------------- testing configuration --------------------------------------------
 OPTION.epoch_per_test = 1
 
 # ------------------------------------------- other configuration -------------------------------------------
-OPTION.checkpoint = '/public/shared/stm_output/models'
+OPTION.pretrained = '/public/shared/stm_output/models/'
+OPTION.checkpoint = '/public/shared/stm_output/models/'
 OPTION.initial = ''      # path to initialize the backbone
 OPTION.resume = ''       # path to restart from the checkpoint
 OPTION.gpu_id = '0'      # defualt gpu-id (if not specified in cmd)
 OPTION.workers = 4
 OPTION.save_indexed_format = True # set True to save indexed format png file, otherwise segmentation with original image
-OPTION.output_dir = 'output'
+OPTION.results = '/public/shared/stm_output/results/'
