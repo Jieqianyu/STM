@@ -4,20 +4,22 @@ import io
 import os
 import os.path as osp
 import pickle
+import copy
+import random
 
 import numpy as np
 from PIL import Image
 from pycocotools import mask as MaskApi
 from pycocotools.coco import COCO
 
+import torch
 from torch.utils.data import Dataset
 
-from libs.dataset.transform import TrainTransform
 
+COCO_ROOT = '/public/datasets/COCO'
+CACHE_ROOT = '/public/shared/stm_output'
+MAX_TRAINING_OBJ = 3
 
-CACHE_ROOT = ''
-COCO_ROOT = ''
-MAX_TRAINING_OBJ = 6
 
 class COCODataset(Dataset):
     r"""
@@ -29,7 +31,7 @@ class COCODataset(Dataset):
     """
     data_items = []
 
-    def __init__(self, transform=TrainTransform, sampled_frames=3) -> None:
+    def __init__(self, transform=None, sampled_frames=3) -> None:
         r"""
         Create dataset with config
         """
@@ -65,19 +67,30 @@ class COCODataset(Dataset):
             annos
             meta (optional)
         """
-        record = COCODataset.data_items[item]
-        image_file = record["file_name"]
-        img_h = record["height"]
-        img_w = record["width"]
-        anno = record['annotations']
-        mask_anno = []
-        for obj in anno:
-            raw_mask = obj['segmentation']
-            mask_obj = self._generate_mask_from_anno(raw_mask, img_h, img_w)
-            mask_anno.append(mask_obj)
+        num_obj = 0
+        while num_obj==0:
+            idx = random.sample(range(len(COCODataset.data_items)), 1)[0]
+            record = COCODataset.data_items[item]
+            image_file = record["file_name"]
+            img_h = record["height"]
+            img_w = record["width"]
+            anno = record['annotations']
+            mask_anno = []
+            for obj in anno:
+                raw_mask = obj['segmentation']
+                mask_obj = self._generate_mask_from_anno(raw_mask, img_h, img_w)
+                mask_anno.append(mask_obj)
+            num_obj = len(mask_anno)
 
+        frame = np.array(Image.open(image_file))
+        if len(frame)==2:
+            frame.repeat(3, axis=2)
+        assert len(frame.shape) == 3
         mask = np.stack(mask_anno, axis=2)
-        frame = Image.open(image_file)
+        # add background
+        bg = np.ones(mask.shape[:2]+(1,))
+        bg[np.any(mask==1, axis=2)] = 0
+        mask = np.concatenate((bg, mask), axis=2)
 
         frames = [frame.copy() for i in range(self.sampled_frames)]
         masks = [mask.copy() for i in range(self.sampled_frames)]
@@ -89,12 +102,12 @@ class COCODataset(Dataset):
         if self.train:
             num_obj = 0
             for i in range(1, MAX_TRAINING_OBJ+1):
-                if torch.sum(mask[0, i]) > 0:
+                if torch.sum(masks[0, i]) > 0:
                     num_obj += 1
                 else:
                     break
 
-        return frames, masks, num_obj
+        return frames, masks, num_obj, None
 
     def __len__(self):
         return len(COCODataset.data_items)
@@ -106,7 +119,7 @@ class COCODataset(Dataset):
             data_anno_list = []
             image_root = osp.join(dataset_root, "images", subset)
             cache_file = osp.join(CACHE_ROOT,"coco_mask_{}.pkl".format(subset))
-            print(cache_file)
+            # print(cache_file)
             if osp.exists(cache_file):
                 with open(cache_file, 'rb') as f:
                     COCODataset.data_items += pickle.load(f)

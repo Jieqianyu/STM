@@ -6,11 +6,11 @@ if cv2_WRONG_PATH in sys.path:
 
 from options import OPTION as opt
 from libs.dataset.transform import TrainTransform, TestTransform
-from libs.dataset.data import DATA_CONTAINER, multibatch_collate_fn
+from libs.dataset.data import DATA_CONTAINER, multibatch_collate_fn, convert_one_hot
 from libs.dataset.image_data import COCODataset
 import torch.utils.data as data
 
-import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -37,13 +37,33 @@ train_transformer = TrainTransform(size=input_dim)
 # print("num_obj:", type(num_obj), num_obj)
 # print("info:", type(info))
 
-ds = COCODataset()
-trainloader = data.DataLoader(ds, batch_size=1, num_workers=2)
-it = enumerate(trainloader)
-for j in range(10):
-    sequence_data, num = next(it)
-print(type(sequence_data), num)
-#print(sequence_data['image'], torch.max(sequence_data['anno'][1]))
+input_dim = opt.input_size
+train_transformer = TrainTransform(size=input_dim)
 
-for i in range(len(sequence_data)):
-    cv2.imwrite('/home/jm/test_{}.png'.format(str(i)), np.array(sequence_data[i][0].numpy()*255, dtype=np.uint8))
+ds = COCODataset(transform=train_transformer)
+print(len(ds))
+trainloader = data.DataLoader(ds, batch_size=1, shuffle=True, num_workers=1,
+                                  collate_fn=multibatch_collate_fn, drop_last=True)
+num = 4
+plt.figure()
+for i, data in enumerate(trainloader):
+    if i == num:
+        break
+    frames, masks, num_objs, info = data
+    print(frames.shape, masks.shape, num_objs.shape)
+
+    frame = frames[0]
+    mask = masks[0]
+    num_obj = num_objs[0]
+    for j in range(frame.shape[0]):
+        ax = plt.subplot(2*num, 3, i*6+j+1)
+        ax.axis('off')
+        ax.imshow(frame[j].numpy().transpose(1, 2, 0))
+        plt.pause(0.01)
+    for k in range(mask.shape[0]):
+        ax = plt.subplot(2*num, 3, i*6+4+k)
+        ax.axis('off')
+        # ax.imshow(np.array(mask[k, 0], dtype=np.uint8))
+        ax.imshow(convert_one_hot(np.array(mask[k],dtype=np.uint8).transpose(1, 2, 0), num_obj.item()))
+        plt.pause(0.01)
+plt.show()

@@ -268,7 +268,7 @@ class SampleObject(object):
                 new_anno[:, :, :num_obj+1] = anno
                 annos[idx] = new_anno
         else:
-            sampled_idx = random.sample(range(1, num_obj+1), self.num)
+            sampled_idx = random.sample(range( ), self.num)
             sampled_idx.sort()
             for idx, anno in enumerate(annos):
                 new_anno = np.zeros(anno.shape[:2]+(self.num+1,))
