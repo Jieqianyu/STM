@@ -49,8 +49,9 @@ class Encoder_M(nn.Module):
         self.conv1_m = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.conv1_bg = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
-        deeplabv3 = models.segmentation.deeplabv3_resnet50(pretrained=True, progress=True, num_classes=21, aux_loss=None)
-        resnet = deeplabv3.backbone
+        # deeplabv3 = models.segmentation.deeplabv3_resnet50(pretrained=True, progress=True, num_classes=21, aux_loss=None)
+        # resnet = deeplabv3.backbone
+        resnet = models.resnet50(pretrained=True)
         self.conv1 = resnet.conv1
         self.bn1 = resnet.bn1
         self.relu = resnet.relu  # 1/2, 64
@@ -83,8 +84,9 @@ class Encoder_Q(nn.Module):
     def __init__(self):
         super(Encoder_Q, self).__init__()
 
-        deeplabv3 = models.segmentation.deeplabv3_resnet50(pretrained=True, progress=True, num_classes=21, aux_loss=None)
-        resnet = deeplabv3.backbone
+        # deeplabv3 = models.segmentation.deeplabv3_resnet50(pretrained=True, progress=True, num_classes=21, aux_loss=None)
+        # resnet = deeplabv3.backbone
+        resnet = models.resnet50(pretrained=True)
         self.conv1 = resnet.conv1
         self.bn1 = resnet.bn1
         self.relu = resnet.relu  # 1/2, 64
