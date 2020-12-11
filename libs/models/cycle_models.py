@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.models as models
 import math
 
-from torchvision import models
 from .gru import ConvGRUCell
 
 from ..utils.utility import mask_iou
+from options import OPTION as opt
 
 def Soft_aggregation(ps, max_obj):
     
@@ -48,9 +49,9 @@ class Encoder_M(nn.Module):
         self.conv1_m = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.conv1_bg = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
-        # resnet = models.resnet50(pretrained=True)
-        deeplabv3 = models.segmentation.deeplabv3_resnet50(pretrained=True, progress=True, num_classes=21, aux_loss=None)
-        resnet = deeplabv3.backbone
+        # deeplabv3 = models.segmentation.deeplabv3_resnet50(pretrained=True, progress=True, num_classes=21, aux_loss=None)
+        # resnet = deeplabv3.backbone
+        resnet = models.resnet50(pretrained=True)
         self.conv1 = resnet.conv1
         self.bn1 = resnet.bn1
         self.relu = resnet.relu  # 1/2, 64
@@ -83,9 +84,9 @@ class Encoder_Q(nn.Module):
     def __init__(self):
         super(Encoder_Q, self).__init__()
 
-        # resnet = models.resnet50(pretrained=True)
-        deeplabv3 = models.segmentation.deeplabv3_resnet50(pretrained=True, progress=True, num_classes=21, aux_loss=None)
-        resnet = deeplabv3.backbone
+        # deeplabv3 = models.segmentation.deeplabv3_resnet50(pretrained=True, progress=True, num_classes=21, aux_loss=None)
+        # resnet = deeplabv3.backbone
+        resnet = models.resnet50(pretrained=True)
         self.conv1 = resnet.conv1
         self.bn1 = resnet.bn1
         self.relu = resnet.relu  # 1/2, 64
@@ -292,14 +293,16 @@ class STM(nn.Module):
             max_obj = mask.shape[2]-1
 
             total_loss = 0.0
-            batch_out = []
+            forward_batch_out = []
+            backward_batch_out = []
             for idx in range(N):
 
                 num_object = num_objects[idx].item()
 
-                batch_keys = []
-                batch_vals = []
-                tmp_out = []
+                # forward
+                forward_batch_keys = []
+                forward_batch_vals = []
+                forward_tmp_out = []
                 for t in range(1, T):
                     # memorize
                     if t-1 == 0 or self.mode == 'mask':
@@ -318,22 +321,47 @@ class STM(nn.Module):
                     key, val, _ = self.memorize(frame=frame[idx, t-1:t], masks=tmp_mask, 
                         num_objects=num_object)
 
-                    batch_keys.append(key)
-                    batch_vals.append(val)
+                    forward_batch_keys.append(key)
+                    forward_batch_vals.append(val)
                     # segment
-                    tmp_key = torch.cat(batch_keys, dim=1)
-                    tmp_val = torch.cat(batch_vals, dim=1)
+                    tmp_key = torch.cat(forward_batch_keys, dim=1)
+                    tmp_val = torch.cat(forward_batch_vals, dim=1)
                     logits, ps = self.segment(frame=frame[idx, t:t+1], keys=tmp_key, values=tmp_val, 
                         num_objects=num_object, max_obj=max_obj)
 
                     out = torch.softmax(logits, dim=1)
-                    tmp_out.append(out)
-                
-                batch_out.append(torch.cat(tmp_out, dim=0))
+                    forward_tmp_out.append(out)
+                forward_batch_out.append(torch.cat(forward_tmp_out, dim=0))
 
-            batch_out = torch.stack(batch_out, dim=0) # B, T, No, H, W
+                del forward_batch_keys, forward_batch_vals, tmp_key, tmp_val
 
-            return batch_out
+                # backward
+                backward_batch_keys = []
+                backward_batch_vals = []
+                backward_tmp_out = []
+                for t in range(1, T):
+                    # memorize
+                    key, val, _ = self.memorize(frame=frame[idx, t:t+1], masks=forward_tmp_out[t-1], 
+                        num_objects=num_object)
+
+                    backward_batch_keys.append(key)
+                    backward_batch_vals.append(val)
+                    # segment
+                    tmp_key = torch.cat(backward_batch_keys, dim=1)
+                    tmp_val = torch.cat(backward_batch_vals, dim=1)
+                    logits, ps = self.segment(frame=frame[idx, 0:1], keys=tmp_key, values=tmp_val, 
+                        num_objects=num_object, max_obj=max_obj)
+
+                    out = torch.softmax(logits, dim=1)
+                    backward_tmp_out.append(out)
+                backward_batch_out.append(torch.cat(backward_tmp_out, dim=0))
+
+                del backward_batch_keys, backward_batch_vals, tmp_key, tmp_val
+
+            forward_batch_out = torch.stack(forward_batch_out, dim=0) # B, T-1, No, H, W
+            backward_batch_out = torch.stack(backward_batch_out, dim=0) # B, T-1, No, H, W
+
+            return forward_batch_out, backward_batch_out
 
         else:
             raise NotImplementedError('unsupported forward mode %s' % self.phase)

@@ -3,7 +3,7 @@ from libs.dataset.transform import TrainTransform, TestTransform
 from libs.utils.logger import Logger, AverageMeter
 from libs.utils.loss import *
 from libs.utils.utility import write_mask, save_checkpoint, adjust_learning_rate
-from libs.models.models import STM
+from libs.models.cycle_models import STM
 
 import torch
 import torch.nn as nn
@@ -87,12 +87,12 @@ def main():
         transform=test_transformer,
         samples_per_video=1
         )
-        
-    trainloader = data.DataLoader(trainset, batch_size=opt.train_batch, shuffle=True,
-                                  num_workers=opt.workers, collate_fn=multibatch_collate_fn, drop_last=True)
 
-    testloader = data.DataLoader(testset, batch_size=1, shuffle=False,
-                                 num_workers=opt.workers, collate_fn=multibatch_collate_fn)
+    trainloader = data.DataLoader(trainset, batch_size=opt.train_batch, shuffle=True, num_workers=opt.workers,
+                                  collate_fn=multibatch_collate_fn, drop_last=True)
+
+    testloader = data.DataLoader(testset, batch_size=1, shuffle=False, num_workers=opt.workers,
+                                 collate_fn=multibatch_collate_fn)
     # Model
     print("==> creating model")
 
@@ -110,7 +110,6 @@ def main():
     for p in net.parameters():
         p.requires_grad = True
 
-    # Strateges
     criterion = None
     celoss = cross_entropy_loss
 
@@ -122,8 +121,7 @@ def main():
         criterion = lambda pred, target, obj: celoss(pred, target, obj) + mask_iou_loss(pred, target, obj)
     else:
         raise TypeError('unknown training loss %s' % opt.loss)
-    
-    # Optimization
+
     optimizer = None
     
     if opt.solver == 'sgd':
@@ -220,7 +218,7 @@ def main():
             else:
                 trainloader.dataset.increase_max_skip()
 
-        # save model  
+        # save model
         is_best = train_loss <= minloss
         minloss = min(minloss, train_loss)
         skips = [ds.max_skip for ds in trainloader.dataset.datasets] \
@@ -267,17 +265,30 @@ def train(trainloader, model, criterion, optimizer, epoch, use_cuda, iter_size, 
         N, T, C, H, W = frames.size()
         max_obj = masks.shape[2]-1
 
-        total_loss = 0.0
-        out = model(frame=frames, mask=masks, num_objects=objs)
-        for idx in range(N):
-            for t in range(1, T):
-                gt = masks[idx, t:t+1]
-                pred = out[idx, t-1: t]
-                No = objs[idx].item()
-                    
-                total_loss = total_loss + criterion(pred, gt, No)
+        forward_out, backward_out = model(frame=frames, mask=masks, num_objects=objs) # frames: B, T, C, H, W; mask: B, T, no, H, W;
 
-        total_loss = total_loss / (N * (T-1))
+        # loss
+        total_loss = 0.0
+        forward_loss = 0.0
+        backward_loss = 0.0
+        for idx in range(N):
+            No = objs[idx].item()
+            gt_backward = masks[idx, 0:1]
+            for t in range(1, T):
+                # forward
+                gt_forward = masks[idx, t:t+1]
+                pred_forward = forward_out[idx, t-1: t]
+                forward_loss = forward_loss + criterion(pred_forward, gt_forward, No)
+
+                # backward
+                pred_backward = forward_out[idx, t-1: t]
+                backward_loss = backward_loss + criterion(pred_backward, gt_backward, No)
+
+        forward_loss = forward_loss / (N * (T-1))
+        backward_loss = backward_loss / (N * (T-1))
+
+        # total loss
+        total_loss = forward_loss + backward_loss
 
         # record loss
         if total_loss.item() > 0.0:
