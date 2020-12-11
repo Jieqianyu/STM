@@ -38,10 +38,10 @@ def main():
     args = parse_args()
     # Use GPU
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu if args.gpu != '' else str(opt.gpu_id)
-    use_gpu = torch.cuda.is_available() and (args.gpu != '' or int(opt.gpu_id)) >= 0
-    gpu_ids = [int(val) for val in args.gpu.split(',')]
+    use_gpu = torch.cuda.is_available() and (args.gpu != '' or opt.gpu_id != '')
+    gpu_ids = range(torch.cuda.device_count())
 
-    if not os.path.isdir(opt.checkpoint):
+    if not os.path.isdir(opt.checkpoint ):
         os.makedirs(opt.checkpoint)
 
     # Data
@@ -104,7 +104,7 @@ def main():
         net = net.cuda()
 
     assert opt.train_batch % len(gpu_ids) == 0
-    net = nn.DataParallel(net, device_ids=gpu_ids, dim=0)
+    net = nn.DataParallel(net)
 
     # set training parameters
     for p in net.parameters():
