@@ -1,4 +1,4 @@
-from libs.dataset.data import DATA_CONTAINER, multibatch_collate_fn
+from libs.dataset.data import ROOT, DATA_CONTAINER, multibatch_collate_fn
 from libs.dataset.transform import TrainTransform, TestTransform
 from libs.utils.logger import Logger, AverageMeter
 from libs.utils.loss import *
@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
+from torch.nn.parallel import DistributedDataParallel
 
 import numpy as np
 import os
@@ -27,21 +28,14 @@ MAX_FLT = 1e6
 
 def parse_args():
     parser = argparse.ArgumentParser('Training Mask Segmentation')
-    parser.add_argument('--gpu', default='', type=str, help='set gpu id to train the network, split with comma')
+    parser.add_argument('--local_rank', type=int, default=0, help='default rank for dist')
     return parser.parse_args()
 
-def main():
-
+def main(args):
     start_epoch = 0
     random.seed(0)
 
-    args = parse_args()
-    # Use GPU
-    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu if args.gpu != '' else str(opt.gpu_id)
-    use_gpu = torch.cuda.is_available() and (args.gpu != '' or opt.gpu_id != '')
-    gpu_ids = range(torch.cuda.device_count())
-
-    if not os.path.isdir(opt.checkpoint ):
+    if not os.path.isdir(opt.checkpoint):
         os.makedirs(opt.checkpoint)
 
     # Data
@@ -87,11 +81,12 @@ def main():
         transform=test_transformer,
         samples_per_video=1
         )
-        
-    trainloader = data.DataLoader(trainset, batch_size=opt.train_batch, shuffle=True, pin_memory=True,
+    train_sampler = torch.utils.data.distributed.DistributedSampler(trainset)
+    trainloader = data.DataLoader(trainset, batch_size=opt.train_batch, shuffle=False, sampler=train_sampler, pin_memory=True,
                                   num_workers=opt.workers, collate_fn=multibatch_collate_fn, drop_last=True)
-
-    testloader = data.DataLoader(testset, batch_size=1, shuffle=False, pin_memory=True,
+                                  
+    test_sampler = torch.utils.data.distributed.DistributedSampler(testset)
+    testloader = data.DataLoader(testset, batch_size=1, shuffle=False, sampler=test_sampler, pin_memory=True,
                                  num_workers=opt.workers, collate_fn=multibatch_collate_fn)
     # Model
     print("==> creating model")
@@ -100,11 +95,9 @@ def main():
             mode=opt.mode, iou_threshold=opt.iou_threshold)
     print('    Total params: %.2fM' % (sum(p.numel() for p in net.parameters())/1000000.0))
     net.eval()
-    if use_gpu:
-        net = net.cuda()
-
-    assert opt.train_batch % len(gpu_ids) == 0
-    net = nn.DataParallel(net)
+    
+    net = net.cuda()
+    net = DistributedDataParallel(net, device_ids=[args.local_rank], output_device=args.local_rank)
 
     # set training parameters
     for p in net.parameters():
@@ -196,7 +189,6 @@ def main():
                            criterion=criterion,
                            optimizer=optimizer,
                            epoch=epoch,
-                           use_cuda=use_gpu,
                            iter_size=opt.iter_size,
                            mode=opt.mode,
                            threshold=opt.iou_threshold)
@@ -206,8 +198,7 @@ def main():
             test(testloader,
                  model=net.module,
                  criterion=criterion,
-                 epoch=epoch,
-                 use_cuda=use_gpu)
+                 epoch=epoch)
 
         # append logger file
         logger.log(epoch+1, opt.learning_rate, train_loss)
@@ -234,14 +225,14 @@ def main():
             'minloss': minloss,
             'optimizer': optimizer.state_dict(),
             'max_skip': skips,
-        }, epoch + 1, is_best, checkpoint=opt.checkpoint, filename=opt.mode, freq=opt.save_model_freq)
+        }, epoch + 1, is_best, checkpoint=opt.checkpoint, filename=opt.mode, , freq=opt.save_model_freq)
 
     logger.close()
 
     print('minimum loss:')
     print(minloss)
 
-def train(trainloader, model, criterion, optimizer, epoch, use_cuda, iter_size, mode, threshold):
+def train(trainloader, model, criterion, optimizer, epoch, iter_size, mode, threshold):
     # switch to train mode
 
     data_time = AverageMeter()
@@ -256,11 +247,9 @@ def train(trainloader, model, criterion, optimizer, epoch, use_cuda, iter_size, 
         frames, masks, objs, infos = data
         # measure data loading time
         data_time.update(time.time() - end)
-        
-        if use_cuda:
-            frames = frames.cuda()
-            masks = masks.cuda()
-            objs = objs.cuda()
+        frames = frames.cuda()
+        masks = masks.cuda()
+        objs = objs.cuda()
 
         objs[objs==0] = 1
 
@@ -305,7 +294,7 @@ def train(trainloader, model, criterion, optimizer, epoch, use_cuda, iter_size, 
 
     return loss.avg
 
-def test(testloader, model, criterion, epoch, use_cuda):
+def test(testloader, model, criterion, epoch):
 
     data_time = AverageMeter()
 
@@ -315,10 +304,8 @@ def test(testloader, model, criterion, epoch, use_cuda):
         for batch_idx, data in enumerate(testloader):
 
             frames, masks, objs, infos = data
-
-            if use_cuda:
-                frames = frames.cuda()
-                masks = masks.cuda()
+            frames = frames.cuda()
+            masks = masks.cuda()
                 
             frames = frames[0]
             masks = masks[0]
@@ -378,4 +365,7 @@ def test(testloader, model, criterion, epoch, use_cuda):
     return
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    torch.distributed.init_process_group(backend='nccl', init_method='env://')
+    torch.cuda.set_device(args.local_rank)
+    main(args)

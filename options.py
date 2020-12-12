@@ -31,6 +31,9 @@ OPTION.loss = 'both'               # 'ce' or 'iou' or 'both'
 OPTION.mode = 'recurrent'          # 'mask' or 'recurrent' or 'threshold'
 OPTION.iou_threshold = 0.65        # used only for 'threshold' training
 OPTION.save_model_freq = 5         # frequence for saving model
+OPTION.correction_freq = 5         # gradient correction for test
+OPTION.correction_iter_times = 10
+OPTION.correction_lr = 150
 
 # ---------------------------------------- testing configuration --------------------------------------------
 OPTION.epoch_per_test = 1

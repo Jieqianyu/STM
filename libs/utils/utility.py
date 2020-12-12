@@ -75,8 +75,10 @@ def write_mask(mask, info, opt):
             seg = np.zeros((h, w, 3), dtype=np.uint8)
             for k in range(1, rescale_mask.max()+1):
                 seg[rescale_mask==k, :] = info['palette'][(k*3):(k+1)*3]
-            if opt.valset == 'DAVIS17':
+            if opt.valset == 'DAVIS17' or opt.valset == 'DAVIS16':
                 inp_img = cv2.imread(os.path.join(ROOT_DAVIS, 'JPEGImages', '480p', name, output_name.replace('png', 'jpg')))
+            else:
+                raise NameError
             im = cv2.addWeighted(inp_img, 0.5, seg, 0.5, 0.0)
             cv2.imwrite(os.path.join(video, output_name), im)
         
