@@ -145,6 +145,7 @@ def test(testloader, model, criterion, use_cuda, opt):
 
             # gradient correction process
             if t % opt.save_freq == 0:
+                pred.append(out.clone())
                 # track gradient
                 out.requires_grad = True
                 optimizer = optim.SGD([out], lr=opt.correction_lr)
@@ -164,8 +165,8 @@ def test(testloader, model, criterion, use_cuda, opt):
                 
                 # no tracking gradient
                 out.requires_grad = False
-
-            pred.append(out)
+            else:
+                pred.append(out)
 
             if (t-1) % opt.save_freq == 0:
                 keys.append(key)
