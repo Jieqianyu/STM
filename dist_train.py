@@ -225,7 +225,7 @@ def main(args):
             'minloss': minloss,
             'optimizer': optimizer.state_dict(),
             'max_skip': skips,
-        }, epoch + 1, is_best, checkpoint=opt.checkpoint, filename=opt.mode, , freq=opt.save_model_freq)
+        }, epoch + 1, is_best, checkpoint=opt.checkpoint, filename=opt.mode, freq=opt.save_model_freq)
 
     logger.close()
 
