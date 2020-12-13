@@ -144,9 +144,10 @@ def test(testloader, model, criterion, use_cuda, opt):
             out = torch.softmax(logits, dim=1)
 
             # gradient correction process
-            if (t-1) % opt.correction_freq == 0:
+            if t % opt.save_freq == 0:
                 # track gradient
                 out.requires_grad = True
+                optimizer = optim.SGD([out], lr=opt.correction_lr)
 
                 for i in range(opt.correction_iter_times):
                     # memorize current frame
@@ -155,11 +156,11 @@ def test(testloader, model, criterion, use_cuda, opt):
                     t_logits, _ = model(frame=frames[0:1, :, :, :], keys=t_key, values=t_val, num_objects=num_objects, max_obj=max_obj)
                     out0 = torch.softmax(t_logits, dim=1)
                     # loss
-                    loss = criterion(out0, masks[0:1])
+                    loss = criterion(out0, masks[0:1], num_objects)
                     # update out
-                    out.grad.data.zero_()
+                    optimizer.zero_grad()
                     loss.backward()
-                    out = out- opt.correction_lr * out.grad
+                    optimizer.step()
                 
                 # no tracking gradient
                 out.requires_grad = False
@@ -186,7 +187,7 @@ def test(testloader, model, criterion, use_cuda, opt):
             
         pred = torch.cat(pred, dim=0)
         pred = pred.detach().cpu().numpy()
-        # write_mask(pred, info, opt)
+        write_mask(pred, info, opt)
         
             
            
