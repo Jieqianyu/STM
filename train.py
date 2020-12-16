@@ -294,11 +294,12 @@ def train(trainloader, model, criterion, optimizer, epoch, use_cuda, iter_size, 
         # measure elapsed time
         end = time.time()
         # plot progress
-        bar.suffix  = '({batch}/{size}) Data: {data:.3f}s |Loss: {loss:.5f}'.format(
+        bar.suffix  = '({batch}/{size}) Data: {data:.3f}s |Loss: {loss_val:.5f}({loss_avg:.5f})'.format(
             batch=batch_idx + 1,
             size=len(trainloader),
             data=data_time.val,
-            loss=loss.avg
+            loss_val=loss.val,
+            loss_avg=loss.avg
         )
         bar.next()
     bar.finish()

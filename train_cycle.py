@@ -88,10 +88,10 @@ def main():
         samples_per_video=1
         )
 
-    trainloader = data.DataLoader(trainset, batch_size=opt.train_batch, shuffle=True, num_workers=opt.workers,
+    trainloader = data.DataLoader(trainset, batch_size=opt.train_batch, shuffle=True, num_workers=opt.workers, pin_memory=True,
                                   collate_fn=multibatch_collate_fn, drop_last=True)
 
-    testloader = data.DataLoader(testset, batch_size=1, shuffle=False, num_workers=opt.workers,
+    testloader = data.DataLoader(testset, batch_size=1, shuffle=False, num_workers=opt.workers, pin_memory=True,
                                  collate_fn=multibatch_collate_fn)
     # Model
     print("==> creating model")
@@ -232,7 +232,7 @@ def main():
             'minloss': minloss,
             'optimizer': optimizer.state_dict(),
             'max_skip': skips,
-        }, epoch + 1, is_best, checkpoint=opt.checkpoint, filename=opt.mode, freq=opt.model_save_freq)
+        }, epoch + 1, is_best, checkpoint=opt.checkpoint, filename=opt.mode, freq=opt.save_model_freq)
 
     logger.close()
 
@@ -305,11 +305,12 @@ def train(trainloader, model, criterion, optimizer, epoch, use_cuda, iter_size, 
         # measure elapsed time
         end = time.time()
         # plot progress
-        bar.suffix  = '({batch}/{size}) Data: {data:.3f}s |Loss: {loss:.5f}'.format(
+        bar.suffix  = '({batch}/{size}) Data: {data:.3f}s |Loss: {loss_val:.5f}({loss_avg:.5f})'.format(
             batch=batch_idx + 1,
             size=len(trainloader),
             data=data_time.val,
-            loss=loss.avg
+            loss_val=loss.val,
+            loss_avg=loss.avg
         )
         bar.next()
     bar.finish()

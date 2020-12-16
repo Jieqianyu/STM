@@ -99,6 +99,7 @@ def main():
 def test(testloader, model, criterion, use_cuda, opt):
 
     data_time = AverageMeter()
+    fps = AverageMeter()
 
     for batch_idx, data in enumerate(testloader):
         frames, masks, objs, infos = data
@@ -143,30 +144,31 @@ def test(testloader, model, criterion, use_cuda, opt):
 
             out = torch.softmax(logits, dim=1)
 
-            # gradient correction process
-            if t % opt.save_freq == 0:
-                pred.append(out.clone())
-                # track gradient
-                out.requires_grad = True
-                optimizer = optim.SGD([out], lr=opt.correction_lr)
+            # # gradient correction process
+            # if t % opt.save_freq == 0:
+            #     pred.append(out.clone())
+            #     # track gradient
+            #     out.requires_grad = True
+            #     optimizer = optim.SGD([out], lr=opt.correction_lr)
 
-                for i in range(opt.correction_iter_times):
-                    # memorize current frame
-                    t_key, t_val, _ = model(frame=frames[t:t+1, :, :, :], mask=out, num_objects=num_objects)
-                    # segment the first frame
-                    t_logits, _ = model(frame=frames[0:1, :, :, :], keys=t_key, values=t_val, num_objects=num_objects, max_obj=max_obj)
-                    out0 = torch.softmax(t_logits, dim=1)
-                    # loss
-                    loss = criterion(out0, masks[0:1], num_objects)
-                    # update out
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
+            #     for i in range(opt.correction_iter_times):
+            #         # memorize current frame
+            #         t_key, t_val, _ = model(frame=frames[t:t+1, :, :, :], mask=out, num_objects=num_objects)
+            #         # segment the first frame
+            #         t_logits, _ = model(frame=frames[0:1, :, :, :], keys=t_key, values=t_val, num_objects=num_objects, max_obj=max_obj)
+            #         out0 = torch.softmax(t_logits, dim=1)
+            #         # loss
+            #         loss = criterion(out0, masks[0:1], num_objects)
+            #         # update out
+            #         optimizer.zero_grad()
+            #         loss.backward()
+            #         optimizer.step()
                 
-                # no tracking gradient
-                out.requires_grad = False
-            else:
-                pred.append(out)
+            #     # no tracking gradient
+            #     out.requires_grad = False
+            # else:
+            #     pred.append(out)
+            pred.append(out)
 
             if (t-1) % opt.save_freq == 0:
                 keys.append(key)
@@ -176,11 +178,13 @@ def test(testloader, model, criterion, use_cuda, opt):
             toc = time.time() - t1
 
             data_time.update(toc, 1)
+            fps.update(1/toc, 1)
 
             # plot progress
-            bar.suffix  = '({batch}/{size}) Time: {data:.3f}s'.format(
+            bar.suffix  = '({batch}/{size}) Average Fps: {fps:.1f} Cumulative Time: {data:.3f}s'.format(
                 batch=t,
                 size=T-1,
+                fps=fps.avg,
                 data=data_time.sum
             )
             bar.next()
@@ -188,9 +192,7 @@ def test(testloader, model, criterion, use_cuda, opt):
             
         pred = torch.cat(pred, dim=0)
         pred = pred.detach().cpu().numpy()
-        write_mask(pred, info, opt)
-        
-            
+        # write_mask(pred, info, opt)     
            
 
     return
