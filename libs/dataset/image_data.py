@@ -83,9 +83,9 @@ class COCODataset(Dataset):
             num_obj = len(mask_anno)
 
         frame = np.array(Image.open(image_file))
-        if len(frame)==2:
+        if len(frame.shape)==2:
             frame = frame[:,:,np.newaxis]
-            frame.repeat(3, axis=2)
+            frame = frame.repeat(3, axis=2)
         assert len(frame.shape) == 3
         mask = np.stack(mask_anno, axis=2)
         # add background
