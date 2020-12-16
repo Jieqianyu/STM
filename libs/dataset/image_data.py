@@ -18,7 +18,7 @@ from torch.utils.data import Dataset
 
 COCO_ROOT = '/public/datasets/COCO'
 CACHE_ROOT = '/public/shared/stm_output'
-MAX_TRAINING_OBJ = 3
+MAX_TRAINING_OBJ = 6
 
 
 class COCODataset(Dataset):
@@ -84,6 +84,7 @@ class COCODataset(Dataset):
 
         frame = np.array(Image.open(image_file))
         if len(frame)==2:
+            frame = frame[:,:,np.newaxis]
             frame.repeat(3, axis=2)
         assert len(frame.shape) == 3
         mask = np.stack(mask_anno, axis=2)

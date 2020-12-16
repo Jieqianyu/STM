@@ -10,6 +10,8 @@ OPTION.input_size = (240, 427)   # input image size
 OPTION.sampled_frames = 3        # min sampled time length while trianing
 OPTION.max_skip = [5, 3]         # max skip time length while trianing
 OPTION.samples_per_video = 2    # sample numbers per video
+OPTION.with_coco = True
+OPTION.opt_coco_freq = 2
 
 # ----------------------------------------- model configuration ---------------------------------------------
 OPTION.keydim = 128
