@@ -281,7 +281,7 @@ def train(trainloader, model, criterion, optimizer, epoch, use_cuda, iter_size, 
                 forward_loss = forward_loss + criterion(pred_forward, gt_forward, No)
 
                 # backward
-                pred_backward = forward_out[idx, t-1: t]
+                pred_backward = backward_out[idx, t-1: t]
                 backward_loss = backward_loss + criterion(pred_backward, gt_backward, No)
 
         forward_loss = forward_loss / (N * (T-1))

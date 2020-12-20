@@ -85,6 +85,7 @@ def test(testloader, model, use_cuda, opt):
 
     data_time = AverageMeter()
     fps = AverageMeter()
+    global_fps = AverageMeter()
 
     with torch.no_grad():
         for batch_idx, data in enumerate(testloader):
@@ -144,18 +145,22 @@ def test(testloader, model, use_cuda, opt):
                 fps.update(1/toc, 1)
 
                 # plot progress
-                bar.suffix  = '({batch}/{size}) Average Fps: {fps:.1f} Cumulative Time: {data:.3f}s'.format(
+                bar.suffix  = '({batch}/{size}) FPS: {fps:.1f} Time: {data:.3f}s'.format(
                     batch=t,
                     size=T-1,
-                    fps=fps.avg,
+                    fps=fps.val,
                     data=data_time.sum
                 )
                 bar.next()
             bar.finish()
+        
+            global_fps.update((T-1)/data_time.sum)
+            data_time.reset()
             
             pred = torch.cat(pred, dim=0)
             pred = pred.detach().cpu().numpy()
-            write_mask(pred, info, opt)
+            # write_mask(pred, info, opt)
+        print("Global FPS:{:.1f}".format(global_fps.avg))
 
     return
 
