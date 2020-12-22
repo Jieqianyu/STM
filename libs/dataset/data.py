@@ -15,9 +15,9 @@ from torch.utils.data import Dataset
 
 
 DATA_CONTAINER = {}
-ROOT_YT = '/public/datasets/YTBVOS'
+ROOT_YT = '/public/home/jm/Data/datasets/YTBVOS'
 # ROOT_DAVIS = '/mnt/hgfs/Download/DAVIS'
-ROOT_DAVIS = '/public/shared/DAVIS'
+ROOT_DAVIS = '/public/home/jm/Data/datasets/DAVIS'
 MAX_TRAINING_OBJ = 6
 MAX_TRAINING_SKIP = 100
 

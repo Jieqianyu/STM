@@ -16,12 +16,22 @@ import torch
 from torch.utils.data import Dataset
 
 
-COCO_ROOT = '/public/datasets/COCO'
-CACHE_ROOT = '/public/shared/stm_output'
+COCO_ROOT = '/public/home/jm/Data/datasets/COCO'
+CACHE_ROOT = '/public/home/jm/Data/output/stm_output'
 MAX_TRAINING_OBJ = 6
 
 
-class COCODataset(Dataset):
+class BaseData(Dataset):
+    def __init__(self,):
+        self.max_skip = None
+
+    def increase_max_skip(self, ):
+        pass
+
+    def set_max_skip(self, max_skip):
+        self.max_skip = max_skip
+
+class COCODataset(BaseData):
     r"""
     COCO dataset helper
     dataset_root: str
@@ -56,7 +66,7 @@ class COCODataset(Dataset):
                 target_mask = target_mask | jth_mask[:, :, iter_chl]
         else:
             target_mask = jth_mask
-        target_mask = target_mask.astype(np.uint8)  # 全部是0或者1
+        target_mask = target_mask.astype(np.uint8)  # 全部�?或�?
         return target_mask
 
     def __getitem__(self, item):
@@ -84,7 +94,7 @@ class COCODataset(Dataset):
 
         frame = np.array(Image.open(image_file))
         if len(frame.shape)==2:
-            frame = frame[:,:,np.newaxis]
+            frame = frame[:, :, np.newaxis]
             frame = frame.repeat(3, axis=2)
         assert len(frame.shape) == 3
         mask = np.stack(mask_anno, axis=2)
