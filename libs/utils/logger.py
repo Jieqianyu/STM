@@ -1,7 +1,25 @@
 import numpy as np
 import time
+import logging
 
 from collections import deque
+
+def set_logging(filename, resume=False):
+    root_logger = logging.getLogger()
+
+    ch = logging.StreamHandler()
+    fh = logging.FileHandler(filename=filename, mode='a' if resume else 'w')
+
+    root_logger.setLevel(logging.INFO)
+    ch.setLevel(logging.INFO)
+    fh.setLevel(logging.INFO)
+
+    formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
+    ch.setFormatter(formatter)
+    fh.setFormatter(formatter)
+
+    root_logger.addHandler(ch)
+    root_logger.addHandler(fh)
 
 class Logger(object):
 

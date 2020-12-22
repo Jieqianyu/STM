@@ -66,7 +66,7 @@ class COCODataset(BaseData):
                 target_mask = target_mask | jth_mask[:, :, iter_chl]
         else:
             target_mask = jth_mask
-        target_mask = target_mask.astype(np.uint8)  # 全部�?或�?
+        target_mask = target_mask.astype(np.uint8) # 0 or 1
         return target_mask
 
     def __getitem__(self, item):
