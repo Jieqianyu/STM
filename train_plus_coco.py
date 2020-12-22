@@ -43,8 +43,13 @@ def main():
     use_gpu = torch.cuda.is_available() and (args.gpu != '' or opt.gpu_id != '')
     gpu_ids = range(torch.cuda.device_count())
 
+    # Create folder
     if not os.path.isdir(opt.checkpoint ):
         os.makedirs(opt.checkpoint)
+        
+    opt.checkpoint = osp.join(osp.join(opt.checkpoint, opt.valset))
+    if not osp.exists(opt.checkpoint):
+        os.mkdir(opt.checkpoint)
 
     # Set logger
     set_logging(filename=os.path.join(opt.checkpoint, opt.mode+'_log.txt'), resume=opt.resume != '')
@@ -149,10 +154,6 @@ def main():
     # Resume
     title = 'STM'
     minloss = float('inf')
-
-    opt.checkpoint = osp.join(osp.join(opt.checkpoint, opt.valset))
-    if not osp.exists(opt.checkpoint):
-        os.mkdir(opt.checkpoint)
 
     if opt.resume:
         # Load checkpoint.
