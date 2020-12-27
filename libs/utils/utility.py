@@ -16,7 +16,7 @@ from ..dataset.data import ROOT_DAVIS
 from libs.davis2017.evaluation import DAVISEvaluation
 
 
-def davis2017_eval(results_path, davis_path=ROOT_DAVIS, task='semi_supervised', set='val', version='2017'):
+def davis2017_eval(results_path, davis_path=ROOT_DAVIS, task='semi-supervised', set='val', version='2017'):
     time_start = time()
     print(f'Evaluating sequences for the {task} task...')
     # Create dataset and evaluate
