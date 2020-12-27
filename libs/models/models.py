@@ -4,7 +4,6 @@ import torch.nn.functional as F
 import math
 
 from torchvision import models
-from .gru import ConvGRUCell
 
 from ..utils.utility import mask_iou
 

@@ -1,6 +1,7 @@
 from libs.dataset.data import DATA_CONTAINER, multibatch_collate_fn
+from libs.dataset.image_data import COCODataset
 from libs.dataset.transform import TrainTransform, TestTransform
-from libs.utils.logger import Logger, AverageMeter
+from libs.utils.logger import set_logging, AverageMeter
 from libs.utils.loss import *
 from libs.utils.utility import write_mask, save_checkpoint, adjust_learning_rate
 from libs.models.models import STM
@@ -20,6 +21,7 @@ import argparse
 import random
 from progress.bar import Bar
 from collections import OrderedDict
+import logging
 
 from options import OPTION as opt
 
@@ -36,16 +38,26 @@ def main():
     random.seed(0)
 
     args = parse_args()
+    print(opt)
     # Use GPU
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu if args.gpu != '' else str(opt.gpu_id)
     use_gpu = torch.cuda.is_available() and (args.gpu != '' or opt.gpu_id != '')
     gpu_ids = range(torch.cuda.device_count())
 
+    # Create folder
     if not os.path.isdir(opt.checkpoint ):
         os.makedirs(opt.checkpoint)
+        
+    opt.checkpoint = osp.join(osp.join(opt.checkpoint, opt.valset))
+    if not osp.exists(opt.checkpoint):
+        os.mkdir(opt.checkpoint)
+
+    # Set logger
+    set_logging(filename=os.path.join(opt.checkpoint, opt.mode+'_log.txt'), resume=opt.resume != '')
+    logger = logging.getLogger(__name__)
 
     # Data
-    print('==> Preparing dataset')
+    logger.info('==> Preparing dataset')
 
     input_dim = opt.input_size
 
@@ -65,7 +77,10 @@ def main():
                     samples_per_video=opt.samples_per_video
                 )
                 datalist += [ds] * freq
-
+            if opt.with_coco:
+                ds = COCODataset(transform=train_transformer, sampled_frames=opt.sampled_frames, ratio=opt.coco_ratio)
+                datalist += [ds]
+                
             trainset = data.ConcatDataset(datalist)
 
         else:
@@ -78,8 +93,8 @@ def main():
                 samples_per_video=opt.samples_per_video
                 )
     except KeyError as ke:
-        print('[ERROR] invalide dataset name is encountered. The current acceptable datasets are:')
-        print(list(DATA_CONTAINER.keys()))
+        logger.error('invalide dataset name is encountered. The current acceptable datasets are:')
+        logger.info(list(DATA_CONTAINER.keys()))
         exit()
 
     testset = DATA_CONTAINER[opt.valset](
@@ -94,11 +109,11 @@ def main():
     testloader = data.DataLoader(testset, batch_size=1, shuffle=False, pin_memory=True,
                                  num_workers=opt.workers, collate_fn=multibatch_collate_fn)
     # Model
-    print("==> creating model")
+    logger.info("==> creating model")
 
     net = STM(opt.keydim, opt.valdim, 'train', 
             mode=opt.mode, iou_threshold=opt.iou_threshold)
-    print('    Total params: %.2fM' % (sum(p.numel() for p in net.parameters())/1000000.0))
+    logger.info('    Total params: %.2fM' % (sum(p.numel() for p in net.parameters())/1000000.0))
     net.eval()
     if use_gpu:
         net = net.cuda()
@@ -141,13 +156,9 @@ def main():
     title = 'STM'
     minloss = float('inf')
 
-    opt.checkpoint = osp.join(osp.join(opt.checkpoint, opt.valset))
-    if not osp.exists(opt.checkpoint):
-        os.mkdir(opt.checkpoint)
-
     if opt.resume:
         # Load checkpoint.
-        print('==> Resuming from checkpoint {}'.format(opt.resume))
+        logger.info('==> Resuming from checkpoint {}'.format(opt.resume))
         assert os.path.isfile(opt.resume), 'Error: no checkpoint directory found!'
         # opt.checkpoint = os.path.dirname(opt.resume)
         checkpoint = torch.load(opt.resume)
@@ -164,22 +175,16 @@ def main():
             else:
                 trainloader.dataset.set_max_skip(skip)
         except:
-            print('[Warning] Initializing max skip fail')
-
-        logger = Logger(os.path.join(opt.checkpoint, opt.mode+'_log.txt'), resume=True)
+            logger.warning('Initializing max skip fail')
     else:
         if opt.initial:
-            print('==> Initialize model with weight file {}'.format(opt.initial))
+            logger.info('==> Initialize model with weight file {}'.format(opt.initial))
             weight = torch.load(opt.initial)
             if isinstance(weight, OrderedDict):
                 net.module.load_param(weight)
             else:
                 net.module.load_param(weight['state_dict'])
-
-        logger = Logger(os.path.join(opt.checkpoint, opt.mode+'_log.txt'), resume=False)
         start_epoch = 0
-
-    logger.set_items(['Epoch', 'LR', 'Train Loss'])
 
     # Train and val
     for epoch in range(start_epoch):
@@ -210,7 +215,8 @@ def main():
                  use_cuda=use_gpu)
 
         # append logger file
-        logger.log(epoch+1, opt.learning_rate, train_loss)
+        log_format = 'Epoch: {} LR: {} Loss: {}'
+        logger.info(log_format.format(epoch+1, opt.learning_rate, train_loss))
 
         # adjust max skip
         if (epoch + 1) % opt.epochs_per_increment == 0:
@@ -236,10 +242,7 @@ def main():
             'max_skip': skips,
         }, epoch + 1, is_best, checkpoint=opt.checkpoint, filename=opt.mode, freq=opt.save_model_freq)
 
-    logger.close()
-
-    print('minimum loss:')
-    print(minloss)
+    logger.info('minimum loss: {}'.format(minloss))
 
 def train(trainloader, model, criterion, optimizer, epoch, use_cuda, iter_size, mode, threshold):
     # switch to train mode

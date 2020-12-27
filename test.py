@@ -2,7 +2,7 @@ from libs.dataset.data import DATA_CONTAINER, multibatch_collate_fn
 from libs.dataset.transform import TrainTransform, TestTransform
 from libs.utils.logger import Logger, AverageMeter
 from libs.utils.loss import *
-from libs.utils.utility import write_mask, save_checkpoint, adjust_learning_rate, mask_iou
+from libs.utils.utility import write_mask, save_checkpoint, adjust_learning_rate, mask_iou, davis2017_eval
 from libs.models.models import STM
 
 import torch
@@ -11,6 +11,7 @@ import torch.optim as optim
 import torch.utils.data as data
 
 import numpy as np
+import pandas as pd
 import os
 import os.path as osp
 import shutil
@@ -18,17 +19,26 @@ import time
 import pickle
 from progress.bar import Bar
 from collections import OrderedDict
+import argparse
 
 from options import OPTION as opt
 
 MAX_FLT = 1e6
 
-# Use CUDA
-device = 'cuda:{}'.format(opt.gpu_id)
-use_gpu = torch.cuda.is_available() and int(opt.gpu_id) >= 0
+
+def parse_args():
+    parser = argparse.ArgumentParser('Testing Mask Segmentation')
+    parser.add_argument('--checkpoint', default='', type=str, help='checkpoint to test the network')
+    parser.add_argument('--gpu', default='0', type=str, help='set gpu id to test the network')
+    return parser.parse_args()
 
 def main():
-
+    
+    args = parse_args()
+    # Use CUDA
+    device = 'cuda:{}'.format(args.gpu)
+    use_gpu = torch.cuda.is_available() and int(args.gpu) >= 0
+    
     # Data
     print('==> Preparing dataset %s' % opt.valset)
 
@@ -63,25 +73,30 @@ def main():
     # Resume
     title = 'STM'
 
-    if opt.resume:
+    if args.checkpoint:
         # Load checkpoint.
-        print('==> Resuming from checkpoint {}'.format(opt.resume))
+        print('==> Loading checkpoint {}'.format(opt.resume))
         assert os.path.isfile(opt.resume), 'Error: no checkpoint directory found!'
         checkpoint = torch.load(opt.resume, map_location=device)
         state = checkpoint['state_dict']
         net.load_param(state)
 
-    # Train and val
+    # Test
     print('==> Runing model on dataset {}, totally {:d} videos'.format(opt.valset, len(testloader)))
 
     test(testloader,
         model=net,
         use_cuda=use_gpu,
+        device=device,
         opt=opt)
 
     print('==> Results are saved at: {}'.format(os.path.join(opt.results, opt.valset)))
+    
+    # Test davis 2017
+    davis2017_eval(results_path=os.path.join(opt.results, opt.valset))
+    
 
-def test(testloader, model, use_cuda, opt):
+def test(testloader, model, use_cuda, device, opt):
 
     data_time = AverageMeter()
     fps = AverageMeter()
@@ -163,6 +178,7 @@ def test(testloader, model, use_cuda, opt):
         print("Global FPS:{:.1f}".format(global_fps.avg))
 
     return
+
 
 if __name__ == '__main__':
     main()

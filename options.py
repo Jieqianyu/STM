@@ -11,7 +11,7 @@ OPTION.sampled_frames = 3        # min sampled time length while trianing
 OPTION.max_skip = [5, 3]         # max skip time length while trianing
 OPTION.samples_per_video = 2    # sample numbers per video
 OPTION.with_coco = True
-OPTION.opt_coco_freq = 2
+OPTION.coco_ratio = 0.01
 
 # ----------------------------------------- model configuration ---------------------------------------------
 OPTION.keydim = 128
@@ -40,11 +40,16 @@ OPTION.correction_lr = 150
 OPTION.epoch_per_test = 1
 
 # ------------------------------------------- other configuration -------------------------------------------
-OPTION.pretrained = '/public/shared/stm_output/models/'
-OPTION.checkpoint = '/public/shared/stm_output/models/'
+OPTION.pretrained = '/public/home/jm/Data/output/stm_output/models_with_coco/'
+# OPTION.pretrained = '/public/home/jm/Data/output/stm_output/models/'
+OPTION.checkpoint = '/public/home/jm/Data/output/stm_output/models_with_coco/'
+# OPTION.checkpoint = '/public/home/jm/Data/output/stm_output/models/'
 OPTION.initial = ''      # path to initialize the backbone
-OPTION.resume = ''       # path to restart from the checkpoint
+# OPTION.resume = ''
+OPTION.resume = '/public/home/jm/Data/output/stm_output/models_with_coco/DAVIS17/recurrent.pth.tar'       # path to restart from the checkpoint
+# OPTION.resume = '/public/home/jm/Data/output/stm_output/models/DAVIS17/recurrent.pth.tar'
 OPTION.gpu_id = '0'      # defualt gpu-id (if not specified in cmd)
 OPTION.workers = 4
 OPTION.save_indexed_format = True # set True to save indexed format png file, otherwise segmentation with original image
-OPTION.results = '/public/shared/stm_output/results/'
+OPTION.results = '/public/home/jm/Data/output/stm_output/results_with_coco/'
+# OPTION.results = '/public/home/jm/Data/output/stm_output/results'

@@ -41,7 +41,7 @@ class COCODataset(BaseData):
     """
     data_items = []
 
-    def __init__(self, transform=None, sampled_frames=3) -> None:
+    def __init__(self, transform=None, sampled_frames=3, ratio=0.1) -> None:
         r"""
         Create dataset with config
         """
@@ -51,6 +51,7 @@ class COCODataset(BaseData):
         self.sampled_frames = sampled_frames
         self.transform = transform
         self.train = True
+        self.ratio = ratio
 
         if len(COCODataset.data_items) == 0:
             self._ensure_cache()
@@ -121,7 +122,7 @@ class COCODataset(BaseData):
         return frames, masks, num_obj, None
 
     def __len__(self):
-        return len(COCODataset.data_items)
+        return int(self.ratio*len(COCODataset.data_items))
 
     def _ensure_cache(self):
         dataset_root = self.dataset_root

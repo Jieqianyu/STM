@@ -6,13 +6,63 @@ import os
 import shutil
 import cv2
 import random
+from time import time
+import sys
+import pandas as pd
 
 from PIL import Image
 from options import OPTION as opt
 from ..dataset.data import ROOT_DAVIS
+from libs.davis2017.evaluation import DAVISEvaluation
+
+
+def davis2017_eval(results_path, davis_path=ROOT_DAVIS, task='semi_supervised', set='val', version='2017'):
+    time_start = time()
+    print(f'Evaluating sequences for the {task} task...')
+    # Create dataset and evaluate
+    dataset_eval = DAVISEvaluation(davis_root=davis_path, task=task, gt_set=set, version=version)
+    metrics_res = dataset_eval.evaluate(results_path)
+    J, F = metrics_res['J'], metrics_res['F']
+    
+    # Path 
+    csv_name_global = f'global_results-{version}{set}.csv'
+    csv_name_per_sequence = f'per-sequence_results-{version}{set}.csv'
+    csv_name_global_path = os.path.join(results_path, csv_name_global)
+    csv_name_per_sequence_path = os.path.join(results_path, csv_name_per_sequence)
+
+    # Generate dataframe for the general results
+    g_measures = ['J&F-Mean', 'J-Mean', 'J-Recall', 'J-Decay', 'F-Mean', 'F-Recall', 'F-Decay']
+    final_mean = (np.mean(J["M"]) + np.mean(F["M"])) / 2.
+    g_res = np.array([final_mean, np.mean(J["M"]), np.mean(J["R"]), np.mean(J["D"]), np.mean(F["M"]), np.mean(F["R"]),
+                      np.mean(F["D"])])
+    g_res = np.reshape(g_res, [1, len(g_res)])
+    table_g = pd.DataFrame(data=g_res, columns=g_measures)
+    with open(csv_name_global_path, 'a') as f:
+        table_g.to_csv(f, index=False, float_format="%.3f")
+    print(f'Global results saved in {csv_name_global_path}')
+
+    # Generate a dataframe for the per sequence results
+    seq_names = list(J['M_per_object'].keys())
+    seq_measures = ['Sequence', 'J-Mean', 'F-Mean']
+    J_per_object = [J['M_per_object'][x] for x in seq_names]
+    F_per_object = [F['M_per_object'][x] for x in seq_names]
+    table_seq = pd.DataFrame(data=list(zip(seq_names, J_per_object, F_per_object)), columns=seq_measures)
+    with open(csv_name_per_sequence_path, 'a') as f:
+        table_seq.to_csv(f, index=False, float_format="%.3f")
+    print(f'Per-sequence results saved in {csv_name_per_sequence_path}')
+
+    # Print the results
+    sys.stdout.write(f"--------------------------- Global results for {set} ---------------------------\n")
+    print(table_g.to_string(index=False))
+    sys.stdout.write(f"\n---------- Per sequence results for {set} ----------\n")
+    print(table_seq.to_string(index=False))
+    total_time = time() - time_start
+    sys.stdout.write('\nTotal time:' + str(total_time))
+    
+    return final_mean
 
 def save_checkpoint(state, epoch, is_best, checkpoint='checkpoint', filename='checkpoint', freq=1):
-    if epoch > opt.epochs - 10:
+    if epoch > opt.epochs - 20:
         filepath = os.path.join(checkpoint, filename + '_{}'.format(str(epoch)) + '.pth.tar')
     else:
         filepath = os.path.join(checkpoint, filename + '.pth.tar')
