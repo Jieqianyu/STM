@@ -35,6 +35,7 @@ def parse_args():
 def main():
     
     args = parse_args()
+    print(opt)
     # Use CUDA
     device = 'cuda:{}'.format(args.gpu)
     use_gpu = torch.cuda.is_available() and int(args.gpu) >= 0
@@ -75,9 +76,9 @@ def main():
 
     if args.checkpoint:
         # Load checkpoint.
-        print('==> Loading checkpoint {}'.format(opt.resume))
-        assert os.path.isfile(opt.resume), 'Error: no checkpoint directory found!'
-        checkpoint = torch.load(opt.resume, map_location=device)
+        print('==> Loading checkpoint {}'.format(args.checkpoint))
+        assert os.path.isfile(args.checkpoint), 'Error: no checkpoint directory found!'
+        checkpoint = torch.load(args.checkpoint, map_location=device)
         state = checkpoint['state_dict']
         net.load_param(state)
 
@@ -174,7 +175,7 @@ def test(testloader, model, use_cuda, device, opt):
             
             pred = torch.cat(pred, dim=0)
             pred = pred.detach().cpu().numpy()
-            # write_mask(pred, info, opt)
+            write_mask(pred, info, opt)
         print("Global FPS:{:.1f}".format(global_fps.avg))
 
     return
