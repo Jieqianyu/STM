@@ -31,10 +31,18 @@ def parse_args():
     parser.add_argument('--gpu', default='', type=str, help='set gpu id to train the network, split with comma')
     return parser.parse_args()
 
+def setup_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+
 def main():
 
     start_epoch = 0
-    random.seed(0)
+    # random.seed(0)
+    setup_seed(0)
 
     args = parse_args()
     # Use GPU
