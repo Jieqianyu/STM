@@ -156,7 +156,7 @@ def adjust_learning_rate(optimizer, epoch, opt):
     if epoch in opt.milestone:
         opt.learning_rate *= opt.gamma
         for pm in optimizer.param_groups:
-            pm['lr'] *= opt.learning_rate
+            pm['lr'] = opt.learning_rate
 
 def pointwise_dist(points1, points2):
 
