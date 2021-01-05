@@ -22,7 +22,13 @@ class Fusion(nn.Module):
     def __init__(self, planes):
         super(Fusion, self).__init__()
 
-        self.attention = nn.Sequential(
+        self.attention_rgb = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(planes, planes, kernel_size=1),
+            nn.Sigmoid()
+            )
+        
+        self.attention_mask = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(planes, planes, kernel_size=1),
             nn.Sigmoid()
@@ -32,8 +38,8 @@ class Fusion(nn.Module):
         assert f_rgb.shape == f_mask.shape, 'rgb feature shape:{} != mask feature shape:{}'.format(f_rgb.shape, f_mask.shape)
         
         # single channel attenton
-        attention_rgb = self.attention(f_rgb)
-        attention_mask = self.attention(f_mask)
+        attention_rgb = self.attention_rgb(f_rgb)
+        attention_mask = self.attention_mask(f_mask)
 
         f_rgb_after_attention = torch.mul(f_rgb, attention_rgb)
         f_mask_after_attention = torch.mul(f_mask, attention_mask)
