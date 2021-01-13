@@ -19,9 +19,14 @@ OPTION.valdim = 512
 OPTION.save_freq = 5
 OPTION.epochs_per_increment = 5
 
+OPTION.backbone = 'resnet34' # 'resnet34' or 'resnet50'
+OPTION.layer = 'r4' # r1,r2,r3,r4
+OPTION.fusion_type = 'se' # 'se' or 'add'
+
 # ---------------------------------------- training configuration -------------------------------------------
-OPTION.epochs = 120
-OPTION.train_batch = 4
+OPTION.epochs = 130
+OPTION.train_batch = 8
+OPTION.workers = 8
 OPTION.learning_rate = 0.00001
 OPTION.gamma = 0.1
 OPTION.momentum = (0.9, 0.999)
@@ -37,19 +42,14 @@ OPTION.correction_iter_times = 10
 OPTION.correction_lr = 150
 
 # ---------------------------------------- testing configuration --------------------------------------------
-OPTION.epoch_per_test = 1
-
-# ------------------------------------------- other configuration -------------------------------------------
-OPTION.pretrained = '/public/home/jm/Data/output/stm_output/models_with_coco/'
-# OPTION.pretrained = '/public/home/jm/Data/output/stm_output/models/'
-OPTION.checkpoint = '/public/home/jm/Data/output/stm_output/models_with_coco/'
-# OPTION.checkpoint = '/public/home/jm/Data/output/stm_output/models/'
-OPTION.initial = ''      # path to initialize the backbone
-# OPTION.resume = ''
-OPTION.resume = '/public/home/jm/Data/output/stm_output/models_with_coco/DAVIS17/recurrent.pth.tar'       # path to restart from the checkpoint
-# OPTION.resume = '/public/home/jm/Data/output/stm_output/models/DAVIS17/recurrent.pth.tar'
-OPTION.gpu_id = '0'      # defualt gpu-id (if not specified in cmd)
-OPTION.workers = 4
+OPTION.epoch_per_test = 130
 OPTION.save_indexed_format = True # set True to save indexed format png file, otherwise segmentation with original image
 OPTION.results = '/public/home/jm/Data/output/stm_output/results_with_coco/'
-# OPTION.results = '/public/home/jm/Data/output/stm_output/results'
+OPTION.gpu_id = '0'      # defualt gpu-id (if not specified in cmd)
+
+# ------------------------------------------- other configuration -------------------------------------------
+OPTION.exp_name = 'baseline'
+OPTION.pretrained = '/public/home/jm/Data/output/stm_output/models_with_coco/'
+OPTION.initial = ''      # path to initialize the backbone
+OPTION.checkpoint = '/public/home/jm/Data/output/stm_output/models_with_coco/'
+OPTION.resume = '' # path to restart from the checkpoint

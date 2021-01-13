@@ -46,7 +46,6 @@ def main():
     setup_seed(0)
 
     args = parse_args()
-    print(opt)
     # Use GPU
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu if args.gpu != '' else str(opt.gpu_id)
     use_gpu = torch.cuda.is_available() and (args.gpu != '' or opt.gpu_id != '')
@@ -63,6 +62,7 @@ def main():
     # Set logger
     set_logging(filename=os.path.join(opt.checkpoint, opt.mode+'_log.txt'), resume=opt.resume != '')
     logger = logging.getLogger(__name__)
+    logger.info(str(opt))
 
     # Data
     logger.info('==> Preparing dataset')

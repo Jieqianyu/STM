@@ -6,6 +6,9 @@ import math
 from torchvision import models
 
 from ..utils.utility import mask_iou
+import logging
+
+logger = logging.getLogger(__name__)
 
 def Soft_aggregation(ps, max_obj):
     
@@ -19,32 +22,47 @@ def Soft_aggregation(ps, max_obj):
     return logit
 
 class Fusion(nn.Module):
-    def __init__(self, planes):
+    def __init__(self, planes, opt):
         super(Fusion, self).__init__()
 
-        self.attention_rgb = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(planes, planes, kernel_size=1),
-            nn.Sigmoid()
-            )
-        
-        self.attention_mask = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(planes, planes, kernel_size=1),
-            nn.Sigmoid()
-            )
+        if opt.fusion_type == 'se':
+            self.attention_rgb = nn.Sequential(
+                nn.AdaptiveAvgPool2d(1),
+                nn.Conv2d(planes, planes, kernel_size=1),
+                nn.Sigmoid()
+                )
+            
+            self.attention_mask = nn.Sequential(
+                nn.AdaptiveAvgPool2d(1),
+                nn.Conv2d(planes, planes, kernel_size=1),
+                nn.Sigmoid()
+                )
+            self.type = 'se'
+
+            logger.info('Fusion type: {}'.format(self.type))
+        elif opt.fusion_type == 'add':
+            self.type = 'add'
+
+            logger.info('Fusion type: {}'.format(self.type))
+        else:
+            raise NotImplementedError
 
     def forward(self, f_rgb, f_mask):
         assert f_rgb.shape == f_mask.shape, 'rgb feature shape:{} != mask feature shape:{}'.format(f_rgb.shape, f_mask.shape)
         
-        # single channel attenton
-        attention_rgb = self.attention_rgb(f_rgb)
-        attention_mask = self.attention_mask(f_mask)
+        if self.type == 'se':
+            # single channel attenton
+            attention_rgb = self.attention_rgb(f_rgb)
+            attention_mask = self.attention_mask(f_mask)
 
-        f_rgb_after_attention = torch.mul(f_rgb, attention_rgb)
-        f_mask_after_attention = torch.mul(f_mask, attention_mask)
+            f_rgb_after_attention = torch.mul(f_rgb, attention_rgb)
+            f_mask_after_attention = torch.mul(f_mask, attention_mask)
 
-        f_fusion = f_rgb_after_attention + f_mask_after_attention
+            f_fusion = f_rgb_after_attention + f_mask_after_attention
+        elif self.type == 'add':
+            f_fusion = f_rgb + f_mask
+        else:
+            raise NotImplementedError
 
         return f_fusion
 
@@ -73,17 +91,52 @@ class _ASPPModule(nn.Module):
                 m.bias.data.zero_()
 
 class Decoder_M(nn.Module):
-    def __init__(self, output_stride, BatchNorm=nn.BatchNorm2d):
+    def __init__(self, opt):
         super(Decoder_M, self).__init__()
-        if output_stride == 16:
-            dilations = [1, 6, 12]
-            inplanes = 256
-        elif output_stride == 8:
-            dilations = [1, 12, 24]
-            inplanes = 128
+        if opt.backbone == 'resnet34':
+            logger.info('Decoder_M bacbone: {}'.format(opt.backbone))
+            if opt.layer == 'r4':
+                dilations = [1, 6, 12]
+                inplanes = 256
+                logger.info('Decoder_M using layer: {}'.format(opt.layer))
+            elif opt.layer == 'r3':
+                dilations = [1, 12, 24]
+                inplanes = 128
+                logger.info('Decoder_M using layer: {}'.format(opt.layer))
+            elif opt.layer == 'r2':
+                dilations = [1, 18, 36]
+                inplanes = 64
+                logger.info('Decoder_M using layer: {}'.format(opt.layer))
+            elif opt.layer == 'r1':
+                dilations = [1, 18, 36]
+                inplanes = 64
+                logger.info('Decoder_M using layer: {}'.format(opt.layer))
+            else:
+                raise NotImplementedError
+        elif opt.backbone == 'resnet50':
+            logger.info('Decoder_M bacbone: {}'.format(opt.backbone))
+            if opt.layer == 'r4':
+                dilations = [1, 6, 12]
+                inplanes = 1024
+                logger.info('Decoder_M using layer: {}'.format(opt.layer))
+            elif opt.layer == 'r3':
+                dilations = [1, 12, 24]
+                inplanes = 512
+                logger.info('Decoder_M using layer: {}'.format(opt.layer))
+            elif opt.layer == 'r2':
+                dilations = [1, 18, 36]
+                inplanes = 256
+                logger.info('Decoder_M using layer: {}'.format(opt.layer))
+            elif opt.layer == 'r1':
+                dilations = [1, 18, 36]
+                inplanes = 64
+                logger.info('Decoder_M using layer: {}'.format(opt.layer))
+            else:
+                raise NotImplementedError
         else:
             raise NotImplementedError
 
+        BatchNorm = nn.BatchNorm2d
         self.aspp1 = _ASPPModule(inplanes, 256, 1, padding=0, dilation=dilations[0], BatchNorm=BatchNorm)
         self.aspp2 = _ASPPModule(inplanes, 256, 3, padding=dilations[1], dilation=dilations[1], BatchNorm=BatchNorm)
         self.aspp3 = _ASPPModule(inplanes, 256, 3, padding=dilations[2], dilation=dilations[2], BatchNorm=BatchNorm)
@@ -148,39 +201,64 @@ class ResBlock(nn.Module):
         return x + r 
 
 class Encoder_M(nn.Module):
-    def __init__(self):
+    def __init__(self, opt):
         super(Encoder_M, self).__init__()
 
-        resnet_rgb = models.resnet34(pretrained=True)
-        resnet_mask = models.resnet34(pretrained=True)
+        if opt.backbone == 'resnet34':
+            resnet_rgb = models.resnet34(pretrained=True)
+            resnet_mask = models.resnet34(pretrained=True)
+            r2_planes = 64
+            r3_planes = 128
+            r4_planes = 256
+            logger.info('Encoder_M backbone: {}'.format(opt.backbone))
+        elif opt.backbone == 'resnet50':
+            resnet_rgb = models.resnet50(pretrained=True)
+            resnet_mask = models.resnet50(pretrained=True)
+            r2_planes = 256
+            r3_planes = 512
+            r4_planes = 1024
+            logger.info('Encoder_M backbone: {}'.format(opt.backbone))
+        else:
+            raise NotImplementedError
+
+        self.fusion_layer = opt.layer
 
         # RGB branch
         self.conv1_rgb = resnet_rgb.conv1
         self.bn1_rgb = resnet_rgb.bn1
-        self.relu_rgb = resnet_rgb.relu  # 1/2, 64
+        self.relu_rgb = resnet_rgb.relu  # 1/2, 64/64
         self.maxpool_rgb = resnet_rgb.maxpool
 
-        self.res2_rgb = resnet_rgb.layer1 # 1/4, 64
-        self.res3_rgb = resnet_rgb.layer2 # 1/8, 128
-        self.res4_rgb = resnet_rgb.layer3 # 1/16, 256
+        self.res2_rgb = resnet_rgb.layer1 # 1/4, 64/256
+        self.res3_rgb = resnet_rgb.layer2 # 1/8, 128/512
+        self.res4_rgb = resnet_rgb.layer3 # 1/16, 256/1024
 
         # mask branch
         self.conv1_mask = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1_mask = resnet_mask.bn1
-        self.relu_mask = resnet_mask.relu  # 1/2, 64
+        self.relu_mask = resnet_mask.relu  # 1/2
         self.maxpool_mask = resnet_mask.maxpool
 
-        self.res2_mask = resnet_mask.layer1 # 1/4, 64
-        self.res3_mask = resnet_mask.layer2 # 1/8, 128
-        self.res4_mask = resnet_mask.layer3 # 1/16, 256
+        # fusion 
+        if self.fusion_layer in ['r2', 'r3', 'r4']:
+            logger.info('Encoder_M: mask branch add res2(layer1), add first fusion block')
 
-        # fusion block
-        self.fusion1 = Fusion(64)
-        self.fusion2 = Fusion(128)
-        self.fusion3 = Fusion(256)
+            self.fusion1 = Fusion(r2_planes, opt)
+            self.res2_mask = resnet_mask.layer1 # 1/4
+        if self.fusion_layer in ['r3', 'r4']:
+            logger.info('Encoder_M: mask branch add res3(layer2), add second fusion block')
 
-        self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1,3,1,1))
-        self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1,3,1,1))
+            self.fusion2 = Fusion(r3_planes, opt)
+            self.res3_mask = resnet_mask.layer2 # 1/8
+        if self.fusion_layer in ['r4']:
+            logger.info('Encoder_M: mask branch add res4(layer3), add third fusion block')
+            
+            self.fusion3 = Fusion(r4_planes, opt)
+            self.res4_mask = resnet_mask.layer3 # 1/16
+
+
+        # self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1,3,1,1))
+        # self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1,3,1,1))
 
     def forward(self, in_f, in_m):
         # f = (in_f - self.mean) / self.std
@@ -196,29 +274,44 @@ class Encoder_M(nn.Module):
         c1_y = self.relu_mask(y)   # 1/2, 64
         r1_x = self.maxpool_rgb(c1_x)  # 1/4, 64
         r1_y = self.maxpool_mask(c1_y)  # 1/4, 64
+        f_m = r1_y
 
         # res2
         r2_x = self.res2_rgb(r1_x) # 1/4, 64
-        r2_y = self.res2_mask(r1_y) # 1/4, 64
-        r2_x_fusion = self.fusion1(r2_x, r2_y)
+        if self.fusion_layer in ['r2', 'r3', 'r4']:
+            r2_y = self.res2_mask(r1_y) # 1/4, 64
+            r2_x = self.fusion1(r2_x, r2_y)
+            f_m = r2_y
 
         # res3
-        r3_x = self.res3_rgb(r2_x_fusion) # 1/8, 128
-        r3_y = self.res3_mask(r2_y) # 1/8, 128
-        r3_x_fusion = self.fusion2(r3_x, r3_y)
+        r3_x = self.res3_rgb(r2_x) # 1/8, 128
+        if self.fusion_layer in ['r3', 'r4']:
+            r3_y = self.res3_mask(r2_y) # 1/8, 128
+            r3_x = self.fusion2(r3_x, r3_y)
+            f_m = r3_y
 
         # res4
-        r4_x = self.res4_rgb(r3_x_fusion) # 1/16, 256
-        r4_y = self.res4_mask(r3_y) # 1/16, 256
-        r4_x_fusion = self.fusion3(r4_x, r4_y)
+        r4_x = self.res4_rgb(r3_x) # 1/16, 256
+        if self.fusion_layer in ['r4']:
+            r4_y = self.res4_mask(r3_y) # 1/16, 256
+            r4_x = self.fusion3(r4_x, r4_y)
+            f_m = r4_y
 
-        return r4_x_fusion, r4_y
+        return r4_x, f_m
  
 class Encoder_Q(nn.Module):
-    def __init__(self):
+    def __init__(self, opt):
         super(Encoder_Q, self).__init__()
 
-        resnet = models.resnet34(pretrained=True)
+        if opt.backbone == 'resnet34':
+            logger.info('Encoder_Q backbone: {}'.format(opt.backbone))
+            resnet = models.resnet34(pretrained=True)
+        elif opt.backbone == 'resnet50':
+            logger.info('Encoder_Q backbone: {}'.format(opt.backbone))
+            resnet = models.resnet50(pretrained=True)
+        else:
+            raise NotImplementedError
+
         self.conv1 = resnet.conv1
         self.bn1 = resnet.bn1
         self.relu = resnet.relu  # 1/2, 64
@@ -228,8 +321,8 @@ class Encoder_Q(nn.Module):
         self.res3 = resnet.layer2 # 1/8, 128
         self.res4 = resnet.layer3 # 1/16, 256
 
-        self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1,3,1,1))
-        self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1,3,1,1))
+        # self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1,3,1,1))
+        # self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1,3,1,1))
 
     def forward(self, in_f):
         # f = (in_f - self.mean) / self.std
@@ -260,12 +353,22 @@ class Refine(nn.Module):
         return m
 
 class Decoder(nn.Module):
-    def __init__(self, inplane, mdim):
+    def __init__(self, inplane, mdim, opt):
         super(Decoder, self).__init__()
         self.convFM = nn.Conv2d(inplane, mdim, kernel_size=(3,3), padding=(1,1), stride=1)
         self.ResMM = ResBlock(mdim, mdim)
-        self.RF3 = Refine(128, mdim) # 1/8 -> 1/4
-        self.RF2 = Refine(64, mdim) # 1/4 -> 1
+
+        if opt.backbone == 'resnet34':
+            r2_planes = 64
+            r3_planes = 128
+        elif opt.backbone == 'resnet50':
+            r2_planes = 256
+            r3_planes = 512
+        else:
+            raise NotImplementedError
+
+        self.RF3 = Refine(r3_planes, mdim) # 1/8 -> 1/4
+        self.RF2 = Refine(r2_planes, mdim) # 1/4 -> 1
 
         self.pred2 = nn.Conv2d(mdim, 2, kernel_size=(3,3), padding=(1,1), stride=1)
 
@@ -314,24 +417,30 @@ class KeyValue(nn.Module):
         return self.Key(x), self.Value(x)
 
 class STM(nn.Module):
-    def __init__(self, keydim, valdim, phase='test', mode='recurrent', iou_threshold=0.5):
+    def __init__(self, opt, phase='test'):
         super(STM, self).__init__()
-        self.Encoder_M = Encoder_M() 
-        self.Encoder_Q = Encoder_Q()
+        self.Encoder_M = Encoder_M(opt) 
+        self.Encoder_Q = Encoder_Q(opt)
 
-        self.keydim = keydim
-        self.valdim = valdim
+        self.keydim = opt.keydim
+        self.valdim = opt.valdim
 
-        self.KV_M_r4 = KeyValue(256, keydim=keydim, valdim=valdim)
-        self.KV_Q_r4 = KeyValue(256, keydim=keydim, valdim=valdim)
+        if opt.backbone == 'resnet34':
+            inplanes = 256
+        elif opt.backbone == 'resnet50':
+            inplanes = 1024
+        else:
+            raise NotImplementedError
+        self.KV_M_r4 = KeyValue(inplanes, keydim=self.keydim, valdim=self.valdim)
+        self.KV_Q_r4 = KeyValue(inplanes, keydim=self.keydim, valdim=self.valdim)
         # self.Routine = DynamicRoutine(channel, iters, centers)
 
         self.Memory = Memory()
-        self.Decoder = Decoder(2*valdim, 256)
-        self.Decoder_M = Decoder_M(16)
+        self.Decoder = Decoder(2*self.valdim, 256, opt)
+        self.Decoder_M = Decoder_M(opt)
         self.phase = phase
-        self.mode = mode
-        self.iou_threshold = iou_threshold
+        self.mode = opt.mode
+        self.iou_threshold = opt.iou_threshold
 
         assert self.phase in ['train', 'test']
 
@@ -374,7 +483,7 @@ class STM(nn.Module):
             print(num_objects)
             raise re
 
-        r4, r4_m = self.Encoder_M(frame_batch, mask_batch) # no, c, h, w
+        r4, f_m = self.Encoder_M(frame_batch, mask_batch) # no, c, h, w
         _, c, h, w = r4.size()
         memfeat = r4
         # memfeat = self.Routine(memfeat, maskb)
@@ -383,7 +492,7 @@ class STM(nn.Module):
         k4 = k4.permute(0, 2, 3, 1).contiguous().view(num_objects, -1, self.keydim)
         v4 = v4.permute(0, 2, 3, 1).contiguous().view(num_objects, -1, self.valdim)
         
-        return k4, v4, (r4, r4_m)
+        return k4, v4, (r4, f_m)
 
     def segment(self, frame, keys, values, num_objects, max_obj): 
         # segment one input frame
@@ -448,7 +557,8 @@ class STM(nn.Module):
 
                     key, val, features = self.memorize(frame=frame[idx, t-1:t], masks=tmp_mask, 
                         num_objects=num_object)
-                        
+                    
+                    # segment mask branch
                     f_m = features[-1]
                     m_out = self.Decoder_M(f_m, frame[idx, t-1:t])
                     m_ps = F.softmax(m_out, dim=1)[:, 1] # no, h, w  
@@ -459,6 +569,7 @@ class STM(nn.Module):
 
                     batch_keys.append(key)
                     batch_vals.append(val)
+
                     # segment
                     tmp_key = torch.cat(batch_keys, dim=1)
                     tmp_val = torch.cat(batch_vals, dim=1)

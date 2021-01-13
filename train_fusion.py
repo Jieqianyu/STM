@@ -4,7 +4,6 @@ from libs.dataset.transform import TrainTransform, TestTransform
 from libs.utils.logger import set_logging, AverageMeter
 from libs.utils.loss import *
 from libs.utils.utility import write_mask, save_checkpoint, adjust_learning_rate
-from libs.models.fusion_models import STM
 
 import torch
 import torch.nn as nn
@@ -24,6 +23,8 @@ from collections import OrderedDict
 import logging
 
 from options import OPTION as opt
+from libs.models.fusion_models import STM
+
 
 MAX_FLT = 1e6
 
@@ -46,7 +47,6 @@ def main():
     setup_seed(1024)
 
     args = parse_args()
-    print(opt)
     # Use GPU
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu if args.gpu != '' else str(opt.gpu_id)
     use_gpu = torch.cuda.is_available() and (args.gpu != '' or opt.gpu_id != '')
@@ -63,6 +63,8 @@ def main():
     # Set logger
     set_logging(filename=os.path.join(opt.checkpoint, opt.mode+'_log.txt'), resume=opt.resume != '')
     logger = logging.getLogger(__name__)
+    logger.info(str(opt))
+    logger.info('==> {}'.format(opt.exp_name))
 
     # Data
     logger.info('==> Preparing dataset')
@@ -119,8 +121,7 @@ def main():
     # Model
     logger.info("==> creating model")
 
-    net = STM(opt.keydim, opt.valdim, 'train', 
-            mode=opt.mode, iou_threshold=opt.iou_threshold)
+    net = STM(opt, phase='train')
     logger.info('    Total params: %.2fM' % (sum(p.numel() for p in net.parameters())/1000000.0))
     net.eval()
     if use_gpu:

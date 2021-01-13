@@ -62,7 +62,7 @@ def davis2017_eval(results_path, davis_path=ROOT_DAVIS, task='semi-supervised', 
     return final_mean
 
 def save_checkpoint(state, epoch, is_best, checkpoint='checkpoint', filename='checkpoint', freq=1):
-    if epoch > opt.epochs - 60:
+    if epoch >= 100 or epoch % 10==0:
         filepath = os.path.join(checkpoint, filename + '_{}'.format(str(epoch)) + '.pth.tar')
     else:
         filepath = os.path.join(checkpoint, filename + '.pth.tar')
