@@ -48,6 +48,82 @@ class Fusion(nn.Module):
 
         return f_fusion
 
+class _ASPPModule(nn.Module):
+    def __init__(self, inplanes, planes, kernel_size, padding, dilation, BatchNorm):
+        super(_ASPPModule, self).__init__()
+        self.atrous_conv = nn.Conv2d(inplanes, planes, kernel_size=kernel_size,
+                                            stride=1, padding=padding, dilation=dilation, bias=False)
+        self.bn = BatchNorm(planes)
+        self.relu = nn.ReLU(inplace=True)
+
+        self._init_weight()
+
+    def forward(self, x):
+        x = self.atrous_conv(x)
+        x = self.bn(x)
+
+        return self.relu(x)
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+class Decoder_M(nn.Module):
+    def __init__(self, output_stride, BatchNorm=nn.BatchNorm2d):
+        super(Decoder_M, self).__init__()
+        if output_stride == 16:
+            dilations = [1, 6, 12]
+            inplanes = 256
+        elif output_stride == 8:
+            dilations = [1, 12, 24]
+            inplanes = 128
+        else:
+            raise NotImplementedError
+
+        self.aspp1 = _ASPPModule(inplanes, 256, 1, padding=0, dilation=dilations[0], BatchNorm=BatchNorm)
+        self.aspp2 = _ASPPModule(inplanes, 256, 3, padding=dilations[1], dilation=dilations[1], BatchNorm=BatchNorm)
+        self.aspp3 = _ASPPModule(inplanes, 256, 3, padding=dilations[2], dilation=dilations[2], BatchNorm=BatchNorm)
+        self.global_avg_pool = nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
+                                             nn.Conv2d(inplanes, 256, 1, stride=1, bias=False),
+                                             BatchNorm(256),
+                                             nn.ReLU(inplace=True))
+
+        self.conv1 = nn.Conv2d(1024, 256, 1, bias=False)
+        self.bn1 = BatchNorm(256)
+        self.relu = nn.ReLU(inplace=True)
+        self.pred2 = nn.Conv2d(256, 2, kernel_size=(3,3), padding=(1,1), stride=1)
+
+        self._init_weight()
+
+    def forward(self, x, f):
+        x1 = self.aspp1(x)
+        x2 = self.aspp2(x)
+        x3 = self.aspp3(x)
+        x4 = self.global_avg_pool(x)
+        x4 = F.interpolate(x4, size=x3.size()[2:], mode='bilinear', align_corners=True)
+        x = torch.cat((x1, x2, x3, x4), dim=1)
+
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+
+        p2 = self.pred2(x)
+        p = F.interpolate(p2, size=f.shape[2:], mode='bilinear', align_corners=False)
+
+        return p
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
 class ResBlock(nn.Module):
     def __init__(self, indim, outdim=None, stride=1):
         super(ResBlock, self).__init__()
@@ -136,7 +212,7 @@ class Encoder_M(nn.Module):
         r4_y = self.res4_mask(r3_y) # 1/16, 256
         r4_x_fusion = self.fusion3(r4_x, r4_y)
 
-        return r4_x_fusion, r3_x_fusion, r2_x_fusion, c1_x
+        return r4_x_fusion, r4_y
  
 class Encoder_Q(nn.Module):
     def __init__(self):
@@ -252,6 +328,7 @@ class STM(nn.Module):
 
         self.Memory = Memory()
         self.Decoder = Decoder(2*valdim, 256)
+        self.Decoder_M = Decoder_M(16)
         self.phase = phase
         self.mode = mode
         self.iou_threshold = iou_threshold
@@ -297,7 +374,7 @@ class STM(nn.Module):
             print(num_objects)
             raise re
 
-        r4, _, _, _ = self.Encoder_M(frame_batch, mask_batch) # no, c, h, w
+        r4, r4_m = self.Encoder_M(frame_batch, mask_batch) # no, c, h, w
         _, c, h, w = r4.size()
         memfeat = r4
         # memfeat = self.Routine(memfeat, maskb)
@@ -306,7 +383,7 @@ class STM(nn.Module):
         k4 = k4.permute(0, 2, 3, 1).contiguous().view(num_objects, -1, self.keydim)
         v4 = v4.permute(0, 2, 3, 1).contiguous().view(num_objects, -1, self.valdim)
         
-        return k4, v4, r4
+        return k4, v4, (r4, r4_m)
 
     def segment(self, frame, keys, values, num_objects, max_obj): 
         # segment one input frame
@@ -345,6 +422,7 @@ class STM(nn.Module):
 
             total_loss = 0.0
             batch_out = []
+            m_batch_out = []
             for idx in range(N):
 
                 num_object = num_objects[idx].item()
@@ -352,6 +430,7 @@ class STM(nn.Module):
                 batch_keys = []
                 batch_vals = []
                 tmp_out = []
+                m_tmp_out = []
                 for t in range(1, T):
                     # memorize
                     if t-1 == 0 or self.mode == 'mask':
@@ -367,8 +446,16 @@ class STM(nn.Module):
                         else:
                             tmp_mask = mask[idx, t-1:t]
 
-                    key, val, _ = self.memorize(frame=frame[idx, t-1:t], masks=tmp_mask, 
+                    key, val, features = self.memorize(frame=frame[idx, t-1:t], masks=tmp_mask, 
                         num_objects=num_object)
+                        
+                    f_m = features[-1]
+                    m_out = self.Decoder_M(f_m, frame[idx, t-1:t])
+                    m_ps = F.softmax(m_out, dim=1)[:, 1] # no, h, w  
+                    #ps = indipendant possibility to belong to each object
+                    m_logits = Soft_aggregation(m_ps, max_obj) # 1, K, H, W
+                    m_out = torch.softmax(m_logits, dim=1)
+                    m_tmp_out.append(m_out)
 
                     batch_keys.append(key)
                     batch_vals.append(val)
@@ -382,10 +469,12 @@ class STM(nn.Module):
                     tmp_out.append(out)
                 
                 batch_out.append(torch.cat(tmp_out, dim=0))
+                m_batch_out.append(torch.cat(m_tmp_out, dim=0))
 
             batch_out = torch.stack(batch_out, dim=0) # B, T, No, H, W
+            m_batch_out = torch.stack(m_batch_out, dim=0)
 
-            return batch_out
+            return batch_out, m_batch_out
 
         else:
             raise NotImplementedError('unsupported forward mode %s' % self.phase)
