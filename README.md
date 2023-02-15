@@ -1,4 +1,4 @@
-# Code for "Delving into the Cyclic Mechanism in Semi-supervised Video Object Segmentation"
+# Reproduction for "Delving into the Cyclic Mechanism in Semi-supervised Video Object Segmentation"
 
 This repository contains the code for [Delving into the Cyclic Mechanism in Semi-supervised Video Object Segmentation](https://arxiv.org/abs/2010.12176). The result of hybrid training on Youtube-VOS and DAVIS17 can be at most 73.3 J&F score  without gradient correction (improve about 1 J&F score with gradient correction) on DAVIS17 validation set.
 
