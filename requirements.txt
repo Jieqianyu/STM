@@ -15,7 +15,7 @@ PyWavelets==1.1.1
 PyYAML
 numpy
 scikit-image==0.17.2
-scipy==1.5.4
+scipy
 Shapely==1.7.1
 six==1.15.0
 tifffile==2020.9.3
